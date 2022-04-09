@@ -1,0 +1,79 @@
+# GraphQL schema example
+#
+# https://gqlgen.com/getting-started/
+
+### Objects
+type Author {
+  id: ID!
+  name: String!
+  created: Int!
+  updated: Int!
+  #
+  books: [Book!]!
+}
+
+type Topic {
+  id: ID!
+  name: String!
+  created: Int!
+  updated: Int!
+  #
+  books: [Book!]!
+}
+
+type Book {
+  id: ID!
+  name: String!
+  content: String!
+  created: Int!
+  updated: Int!
+  topicsId: [ID!]!
+  authorsId: [ID!]!
+  #
+  topics: [Topic!]!
+  authors: [Author!]!
+  reviews: [Review!]!
+}
+
+type Review {
+  id: ID!
+  content: String!
+  created: Int!
+  updated: Int!
+  bookId: ID!
+}
+
+### Query
+type Query {
+  authors: [Author!]!
+  topics: [Topic!]!
+  books: [Book!]!
+}
+
+### Mutation
+input NewAuthor {
+  name: String!
+}
+
+input NewTopic {
+  name: String!
+}
+
+input NewBook {
+  name: String!
+  content: String!
+  topicsId: [ID!]!
+  authorsId: [ID!]!
+}
+
+input NewReview {
+  content: String!
+  bookId: ID!
+}
+
+type Mutation {
+  createAuthor(input: NewAuthor!): Author!
+  createTopic(input: NewTopic): Topic!
+  createBook(input: NewBook): Book!
+  createReview(input: NewReview): Review!
+}
