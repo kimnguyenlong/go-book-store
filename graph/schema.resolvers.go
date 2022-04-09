@@ -7,10 +7,12 @@ import (
 	"book-store/graph/generated"
 	"book-store/graph/model"
 	"context"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (r *authorResolver) Books(ctx context.Context, obj *model.Author) ([]*model.Book, error) {
@@ -90,6 +92,13 @@ func (r *bookResolver) Reviews(ctx context.Context, obj *model.Book) ([]*model.R
 }
 
 func (r *mutationResolver) CreateAuthor(ctx context.Context, input model.NewAuthor) (*model.Author, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if auth.Role != model.RoleAdmin.String() {
+		return nil, fmt.Errorf("Access denied!")
+	}
 	now := time.Now().Unix()
 	authorData := bson.M{
 		"name":    input.Name,
@@ -108,7 +117,46 @@ func (r *mutationResolver) CreateAuthor(ctx context.Context, input model.NewAuth
 	}, nil
 }
 
-func (r *mutationResolver) CreateTopic(ctx context.Context, input *model.NewTopic) (*model.Topic, error) {
+func (r *mutationResolver) CreateUser(ctx context.Context, input model.NewUser) (*model.User, error) {
+	if !input.Role.IsValid() {
+		return nil, fmt.Errorf("Invalid Role")
+	}
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Unix()
+	userData := bson.M{
+		"name":     input.Name,
+		"email":    input.Email,
+		"password": string(hashedPassword),
+		"role":     input.Role,
+		"created":  now,
+		"updated":  now,
+	}
+	result, err := r.DB.Collection("users").InsertOne(context.Background(), userData)
+	if err != nil {
+		return nil, err
+	}
+	return &model.User{
+		ID:       result.InsertedID.(primitive.ObjectID).Hex(),
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: string(hashedPassword),
+		Role:     input.Role,
+		Created:  now,
+		Updated:  now,
+	}, nil
+}
+
+func (r *mutationResolver) CreateTopic(ctx context.Context, input model.NewTopic) (*model.Topic, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if auth.Role != model.RoleAdmin.String() {
+		return nil, fmt.Errorf("Access denied!")
+	}
 	now := time.Now().Unix()
 	topicData := bson.M{
 		"name":    input.Name,
@@ -127,7 +175,14 @@ func (r *mutationResolver) CreateTopic(ctx context.Context, input *model.NewTopi
 	}, nil
 }
 
-func (r *mutationResolver) CreateBook(ctx context.Context, input *model.NewBook) (*model.Book, error) {
+func (r *mutationResolver) CreateBook(ctx context.Context, input model.NewBook) (*model.Book, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if auth.Role != model.RoleAdmin.String() {
+		return nil, fmt.Errorf("Access denied!")
+	}
 	now := time.Now().Unix()
 	bookData := bson.M{
 		"name":      input.Name,
@@ -152,13 +207,18 @@ func (r *mutationResolver) CreateBook(ctx context.Context, input *model.NewBook)
 	}, nil
 }
 
-func (r *mutationResolver) CreateReview(ctx context.Context, input *model.NewReview) (*model.Review, error) {
+func (r *mutationResolver) CreateReview(ctx context.Context, input model.NewReview) (*model.Review, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now().Unix()
 	reviewData := bson.M{
 		"content": input.Content,
 		"created": now,
 		"updated": now,
 		"bookId":  input.BookID,
+		"userId":  auth.UID,
 	}
 	result, err := r.DB.Collection("reviews").InsertOne(context.Background(), reviewData)
 	if err != nil {
@@ -171,6 +231,22 @@ func (r *mutationResolver) CreateReview(ctx context.Context, input *model.NewRev
 		Updated: now,
 		BookID:  input.BookID,
 	}, nil
+}
+
+func (r *queryResolver) Login(ctx context.Context, input *model.Login) (string, error) {
+	var user model.User
+	err := r.DB.Collection("users").FindOne(context.Background(), bson.M{"email": input.Email}).Decode(&user)
+	if err != nil {
+		return "", fmt.Errorf("Email %v doesn't exist", input.Email)
+	}
+	if !user.CheckPassword(input.Password) {
+		return "", fmt.Errorf("Incorrect password")
+	}
+	tokenString, err := user.CreateJWT()
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
 }
 
 func (r *queryResolver) Authors(ctx context.Context) ([]*model.Author, error) {

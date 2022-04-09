@@ -12,6 +12,21 @@ type Author {
   books: [Book!]!
 }
 
+enum Role {
+  ADMIN
+  CLIENT
+}
+
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  password: String!
+  role: Role!
+  created: Int!
+  updated: Int!
+}
+
 type Topic {
   id: ID!
   name: String!
@@ -41,18 +56,19 @@ type Review {
   created: Int!
   updated: Int!
   bookId: ID!
+  userId: ID!
 }
 
-### Query
-type Query {
-  authors: [Author!]!
-  topics: [Topic!]!
-  books: [Book!]!
-}
-
-### Mutation
+### Input
 input NewAuthor {
   name: String!
+}
+
+input NewUser {
+  name: String!
+  email: String!
+  password: String!
+  role: Role!
 }
 
 input NewTopic {
@@ -71,9 +87,24 @@ input NewReview {
   bookId: ID!
 }
 
+input Login {
+  email: String!
+  password: String!
+}
+
+### Query
+type Query {
+  login(input: Login): String!
+  authors: [Author!]!
+  topics: [Topic!]!
+  books: [Book!]!
+}
+
+### Mutation
 type Mutation {
   createAuthor(input: NewAuthor!): Author!
-  createTopic(input: NewTopic): Topic!
-  createBook(input: NewBook): Book!
-  createReview(input: NewReview): Review!
+  createUser(input: NewUser!): User!
+  createTopic(input: NewTopic!): Topic!
+  createBook(input: NewBook!): Book!
+  createReview(input: NewReview!): Review!
 }

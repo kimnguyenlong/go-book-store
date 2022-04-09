@@ -1,4 +1,4 @@
-package handler
+package middleware
 
 import (
 	"book-store/graph"
@@ -11,17 +11,16 @@ import (
 )
 
 func GraphqlHandler(db *mongo.Database) gin.HandlerFunc {
-	h := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{
-		DB: db,
-	}}))
-
+	resolver := &graph.Resolver{DB: db}
+	schema := generated.NewExecutableSchema(generated.Config{Resolvers: resolver})
+	h := handler.NewDefaultServer(schema)
 	return func(c *gin.Context) {
 		h.ServeHTTP(c.Writer, c.Request)
 	}
 }
 
 func PlaygroundHandler() gin.HandlerFunc {
-	h := playground.Handler("GraphQL", "/gql")
+	h := playground.Handler("Book Store - GraphQL", "/gql")
 
 	return func(c *gin.Context) {
 		h.ServeHTTP(c.Writer, c.Request)

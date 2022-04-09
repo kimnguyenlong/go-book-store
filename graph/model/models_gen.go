@@ -2,16 +2,22 @@
 
 package model
 
+import (
+	"fmt"
+	"io"
+	"strconv"
+)
+
 type Author struct {
-	ID      string  `json:"id" bson:"_id,omitempty"`
+	ID      string  `json:"id" bson:"_id"`
 	Name    string  `json:"name"`
 	Created int64   `json:"created"`
 	Updated int64   `json:"updated"`
 	Books   []*Book `json:"books"`
 }
 
-type Book struct { 
-	ID        string    `json:"id" bson:"_id,omitempty"`
+type Book struct {
+	ID        string    `json:"id" bson:"_id"`
 	Name      string    `json:"name"`
 	Content   string    `json:"content"`
 	Created   int64     `json:"created"`
@@ -21,6 +27,11 @@ type Book struct {
 	Topics    []*Topic  `json:"topics"`
 	Authors   []*Author `json:"authors"`
 	Reviews   []*Review `json:"reviews"`
+}
+
+type Login struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type NewAuthor struct {
@@ -43,18 +54,77 @@ type NewTopic struct {
 	Name string `json:"name"`
 }
 
+type NewUser struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     Role   `json:"role"`
+}
+
 type Review struct {
-	ID      string `json:"id" bson:"_id,omitempty"`
+	ID      string `json:"id" bson:"_id"`
 	Content string `json:"content"`
 	Created int64  `json:"created"`
 	Updated int64  `json:"updated"`
 	BookID  string `json:"bookId"`
+	UserID  string `json:"userId"`
 }
 
 type Topic struct {
-	ID      string  `json:"id" bson:"_id,omitempty"`
+	ID      string  `json:"id" bson:"_id"`
 	Name    string  `json:"name"`
 	Created int64   `json:"created"`
 	Updated int64   `json:"updated"`
 	Books   []*Book `json:"books"`
+}
+
+type User struct {
+	ID       string `json:"id" bson:"_id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     Role   `json:"role"`
+	Created  int64  `json:"created"`
+	Updated  int64  `json:"updated"`
+}
+
+type Role string
+
+const (
+	RoleAdmin  Role = "ADMIN"
+	RoleClient Role = "CLIENT"
+)
+
+var AllRole = []Role{
+	RoleAdmin,
+	RoleClient,
+}
+
+func (e Role) IsValid() bool {
+	switch e {
+	case RoleAdmin, RoleClient:
+		return true
+	}
+	return false
+}
+
+func (e Role) String() string {
+	return string(e)
+}
+
+func (e *Role) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = Role(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid Role", str)
+	}
+	return nil
+}
+
+func (e Role) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
 }

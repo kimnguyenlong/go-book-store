@@ -2,7 +2,7 @@ package main
 
 import (
 	"book-store/db"
-	"book-store/handler"
+	"book-store/middleware"
 	"context"
 	"log"
 	"os"
@@ -22,8 +22,10 @@ func main() {
 
 	router := gin.Default()
 
-	router.POST("/gql", handler.GraphqlHandler(mongoClient.Database("book-store")))
-	router.GET("/", handler.PlaygroundHandler())
+	router.Use(middleware.GinContextToGQLContext())
+
+	router.POST("/gql", middleware.GraphqlHandler(mongoClient.Database("book-store")))
+	router.GET("/", middleware.PlaygroundHandler())
 
 	router.Run(":8080")
 }
