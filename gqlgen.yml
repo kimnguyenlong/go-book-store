@@ -70,3 +70,11 @@ models:
         resolver: true
       reviews:
         resolver: true
+  CartItem:
+    fields:
+      book:
+        resolver: true
+  WishList:
+    fields:
+      books:
+        resolver: true

@@ -12,17 +12,18 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func (r *authorResolver) Books(ctx context.Context, obj *model.Author) ([]*model.Book, error) {
 	filter := bson.M{"authorsId": bson.M{"$all": bson.A{obj.ID}}}
 	cs, err := r.DB.Collection("books").Find(context.Background(), filter)
-	defer cs.Close(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	var books []*model.Book
+	defer cs.Close(context.Background())
 	err = cs.All(context.Background(), &books)
 	if err != nil {
 		return nil, err
@@ -41,11 +42,11 @@ func (r *bookResolver) Topics(ctx context.Context, obj *model.Book) ([]*model.To
 	}
 	filter := bson.M{"_id": bson.M{"$in": topicsId}}
 	cs, err := r.DB.Collection("topics").Find(context.Background(), filter)
-	defer cs.Close(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	var topics []*model.Topic
+	defer cs.Close(context.Background())
 	err = cs.All(context.Background(), &topics)
 	if err != nil {
 		return nil, err
@@ -64,11 +65,11 @@ func (r *bookResolver) Authors(ctx context.Context, obj *model.Book) ([]*model.A
 	}
 	filter := bson.M{"_id": bson.M{"$in": authorsId}}
 	cs, err := r.DB.Collection("authors").Find(context.Background(), filter)
-	defer cs.Close(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	var authors []*model.Author
+	defer cs.Close(context.Background())
 	err = cs.All(context.Background(), &authors)
 	if err != nil {
 		return nil, err
@@ -79,16 +80,29 @@ func (r *bookResolver) Authors(ctx context.Context, obj *model.Book) ([]*model.A
 func (r *bookResolver) Reviews(ctx context.Context, obj *model.Book) ([]*model.Review, error) {
 	filter := bson.M{"bookId": obj.ID}
 	cs, err := r.DB.Collection("reviews").Find(context.Background(), filter)
-	defer cs.Close(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	var reviews []*model.Review
+	defer cs.Close(context.Background())
 	err = cs.All(context.Background(), &reviews)
 	if err != nil {
 		return nil, err
 	}
 	return reviews, nil
+}
+
+func (r *cartItemResolver) Book(ctx context.Context, obj *model.CartItem) (*model.Book, error) {
+	bookId, err := primitive.ObjectIDFromHex(obj.BookID)
+	if err != nil {
+		return nil, err
+	}
+	var book *model.Book
+	err = r.DB.Collection("books").FindOne(context.Background(), bson.M{"_id": bookId}).Decode(&book)
+	if err != nil {
+		return nil, err
+	}
+	return book, nil
 }
 
 func (r *mutationResolver) CreateAuthor(ctx context.Context, input model.NewAuthor) (*model.Author, error) {
@@ -186,6 +200,7 @@ func (r *mutationResolver) CreateBook(ctx context.Context, input model.NewBook) 
 	now := time.Now().Unix()
 	bookData := bson.M{
 		"name":      input.Name,
+		"price":     input.Price,
 		"content":   input.Content,
 		"created":   now,
 		"updated":   now,
@@ -199,6 +214,7 @@ func (r *mutationResolver) CreateBook(ctx context.Context, input model.NewBook) 
 	return &model.Book{
 		ID:        result.InsertedID.(primitive.ObjectID).Hex(),
 		Name:      input.Name,
+		Price:     input.Price,
 		Content:   input.Content,
 		TopicsID:  input.TopicsID,
 		AuthorsID: input.AuthorsID,
@@ -230,7 +246,59 @@ func (r *mutationResolver) CreateReview(ctx context.Context, input model.NewRevi
 		Created: now,
 		Updated: now,
 		BookID:  input.BookID,
+		UserID:  auth.UID,
 	}, nil
+}
+
+func (r *mutationResolver) SetCart(ctx context.Context, input model.CartData) (*model.Cart, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{"userId": auth.UID}
+	update := bson.M{"$set": bson.M{"items": input.Items}}
+	opts := options.Update().SetUpsert(true)
+	result, err := r.DB.Collection("carts").UpdateOne(context.Background(), filter, update, opts)
+	if err != nil {
+		return nil, err
+	}
+	items := []*model.CartItem{}
+	for _, item := range input.Items {
+		items = append(items, &model.CartItem{
+			BookID:   item.BookID,
+			Quantity: item.Quantity,
+		})
+	}
+	return &model.Cart{
+		ID:     result.UpsertedID.(primitive.ObjectID).Hex(),
+		UserID: auth.UID,
+		Items:  items,
+	}, nil
+}
+
+func (r *mutationResolver) UpdateWishList(ctx context.Context, input model.WishListUpdate) (*model.WishList, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var wishList *model.WishList
+	filter := bson.M{"userId": auth.UID}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After).SetUpsert(true)
+	if len(input.Add) > 0 {
+		addUpdate := bson.M{"$addToSet": bson.M{"booksId": bson.M{"$each": input.Add}}}
+		err = r.DB.Collection("wish-lists").FindOneAndUpdate(context.Background(), filter, addUpdate, opts).Decode(&wishList)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(input.Remove) > 0 {
+		removeUpdate := bson.M{"$pull": bson.M{"booksId": bson.M{"$in": input.Remove}}}
+		err = r.DB.Collection("wish-lists").FindOneAndUpdate(context.Background(), filter, removeUpdate, opts).Decode(&wishList)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return wishList, nil
 }
 
 func (r *queryResolver) Login(ctx context.Context, input *model.Login) (string, error) {
@@ -251,11 +319,11 @@ func (r *queryResolver) Login(ctx context.Context, input *model.Login) (string, 
 
 func (r *queryResolver) Authors(ctx context.Context) ([]*model.Author, error) {
 	cs, err := r.DB.Collection("authors").Find(context.Background(), bson.M{})
-	defer cs.Close(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	var authors []*model.Author
+	defer cs.Close(context.Background())
 	err = cs.All(context.Background(), &authors)
 	if err != nil {
 		return nil, err
@@ -265,11 +333,11 @@ func (r *queryResolver) Authors(ctx context.Context) ([]*model.Author, error) {
 
 func (r *queryResolver) Topics(ctx context.Context) ([]*model.Topic, error) {
 	cs, err := r.DB.Collection("topics").Find(context.Background(), bson.M{})
-	defer cs.Close(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	var topics []*model.Topic
+	defer cs.Close(context.Background())
 	err = cs.All(context.Background(), &topics)
 	if err != nil {
 		return nil, err
@@ -279,11 +347,11 @@ func (r *queryResolver) Topics(ctx context.Context) ([]*model.Topic, error) {
 
 func (r *queryResolver) Books(ctx context.Context) ([]*model.Book, error) {
 	cs, err := r.DB.Collection("books").Find(context.Background(), bson.M{})
-	defer cs.Close(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	var books []*model.Book
+	defer cs.Close(context.Background())
 	err = cs.All(context.Background(), &books)
 	if err != nil {
 		return nil, err
@@ -291,14 +359,68 @@ func (r *queryResolver) Books(ctx context.Context) ([]*model.Book, error) {
 	return books, nil
 }
 
+func (r *queryResolver) Cart(ctx context.Context) (*model.Cart, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var cart *model.Cart
+	filter := bson.M{"userId": auth.UID}
+	err = r.DB.Collection("carts").FindOne(context.Background(), filter).Decode(&cart)
+	if err != nil {
+		return nil, err
+	}
+	return cart, nil
+}
+
+func (r *queryResolver) WishList(ctx context.Context) (*model.WishList, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var wishList *model.WishList
+	filter := bson.M{"userId": auth.UID}
+	err = r.DB.Collection("carts").FindOne(context.Background(), filter).Decode(&wishList)
+	if err != nil {
+		return nil, err
+	}
+	return wishList, nil
+}
+
 func (r *topicResolver) Books(ctx context.Context, obj *model.Topic) ([]*model.Book, error) {
 	filter := bson.M{"topicsId": bson.M{"$all": bson.A{obj.ID}}}
 	cs, err := r.DB.Collection("books").Find(context.Background(), filter)
-	defer cs.Close(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	var books []*model.Book
+	defer cs.Close(context.Background())
+	err = cs.All(context.Background(), &books)
+	if err != nil {
+		return nil, err
+	}
+	return books, nil
+}
+
+func (r *wishListResolver) Books(ctx context.Context, obj *model.WishList) ([]*model.Book, error) {
+	if len(obj.BooksID) == 0 {
+		return []*model.Book{}, nil
+	}
+	var booksId []primitive.ObjectID
+	for _, id := range obj.BooksID {
+		objId, err := primitive.ObjectIDFromHex(id)
+		if err != nil {
+			continue
+		}
+		booksId = append(booksId, objId)
+	}
+	filter := bson.M{"_id": bson.M{"$in": booksId}}
+	cs, err := r.DB.Collection("books").Find(context.Background(), filter)
+	if err != nil {
+		return nil, err
+	}
+	var books []*model.Book
+	defer cs.Close(context.Background())
 	err = cs.All(context.Background(), &books)
 	if err != nil {
 		return nil, err
@@ -312,6 +434,9 @@ func (r *Resolver) Author() generated.AuthorResolver { return &authorResolver{r}
 // Book returns generated.BookResolver implementation.
 func (r *Resolver) Book() generated.BookResolver { return &bookResolver{r} }
 
+// CartItem returns generated.CartItemResolver implementation.
+func (r *Resolver) CartItem() generated.CartItemResolver { return &cartItemResolver{r} }
+
 // Mutation returns generated.MutationResolver implementation.
 func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
 
@@ -321,8 +446,13 @@ func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 // Topic returns generated.TopicResolver implementation.
 func (r *Resolver) Topic() generated.TopicResolver { return &topicResolver{r} }
 
+// WishList returns generated.WishListResolver implementation.
+func (r *Resolver) WishList() generated.WishListResolver { return &wishListResolver{r} }
+
 type authorResolver struct{ *Resolver }
 type bookResolver struct{ *Resolver }
+type cartItemResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type topicResolver struct{ *Resolver }
+type wishListResolver struct{ *Resolver }

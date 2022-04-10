@@ -39,6 +39,7 @@ type Topic {
 type Book {
   id: ID!
   name: String!
+  price: Float!
   content: String!
   created: Int!
   updated: Int!
@@ -59,6 +60,25 @@ type Review {
   userId: ID!
 }
 
+type CartItem {
+  bookId: ID!
+  quantity: Int!
+  book: Book!
+}
+
+type Cart {
+  id: ID!
+  userId: ID!
+  items: [CartItem!]!
+}
+
+type WishList {
+  id: ID!
+  userId: ID!
+  booksId: [ID!]!
+  books: [Book!]!
+}
+
 ### Input
 input NewAuthor {
   name: String!
@@ -77,6 +97,7 @@ input NewTopic {
 
 input NewBook {
   name: String!
+  price: Float!
   content: String!
   topicsId: [ID!]!
   authorsId: [ID!]!
@@ -92,19 +113,43 @@ input Login {
   password: String!
 }
 
+input CartDataItem {
+  bookId: ID!
+  quantity: Int!
+}
+
+input CartData {
+  items: [CartDataItem!]!
+}
+
+input WishListUpdate {
+  add: [ID!]
+  remove: [ID!]
+}
+
 ### Query
 type Query {
   login(input: Login): String!
   authors: [Author!]!
   topics: [Topic!]!
   books: [Book!]!
+  cart: Cart!
+  wishList: WishList!
 }
 
 ### Mutation
 type Mutation {
   createAuthor(input: NewAuthor!): Author!
+
   createUser(input: NewUser!): User!
+
   createTopic(input: NewTopic!): Topic!
+
   createBook(input: NewBook!): Book!
+
   createReview(input: NewReview!): Review!
+
+  setCart(input: CartData!): Cart!
+
+  updateWishList(input: WishListUpdate!): WishList!
 }

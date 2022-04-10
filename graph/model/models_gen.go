@@ -19,6 +19,7 @@ type Author struct {
 type Book struct {
 	ID        string    `json:"id" bson:"_id"`
 	Name      string    `json:"name"`
+	Price     float64   `json:"price"`
 	Content   string    `json:"content"`
 	Created   int64     `json:"created"`
 	Updated   int64     `json:"updated"`
@@ -27,6 +28,27 @@ type Book struct {
 	Topics    []*Topic  `json:"topics"`
 	Authors   []*Author `json:"authors"`
 	Reviews   []*Review `json:"reviews"`
+}
+
+type Cart struct {
+	ID     string      `json:"id" bson:"_id"`
+	UserID string      `json:"userId"`
+	Items  []*CartItem `json:"items"`
+}
+
+type CartData struct {
+	Items []*CartDataItem `json:"items"`
+}
+
+type CartDataItem struct {
+	BookID   string `json:"bookId"`
+	Quantity int64  `json:"quantity"`
+}
+
+type CartItem struct {
+	BookID   string `json:"bookId"`
+	Quantity int64  `json:"quantity"`
+	Book     *Book  `json:"book"`
 }
 
 type Login struct {
@@ -40,6 +62,7 @@ type NewAuthor struct {
 
 type NewBook struct {
 	Name      string   `json:"name"`
+	Price     float64  `json:"price"`
 	Content   string   `json:"content"`
 	TopicsID  []string `json:"topicsId"`
 	AuthorsID []string `json:"authorsId"`
@@ -86,6 +109,18 @@ type User struct {
 	Role     Role   `json:"role"`
 	Created  int64  `json:"created"`
 	Updated  int64  `json:"updated"`
+}
+
+type WishList struct {
+	ID      string   `json:"id" bson:"_id"`
+	UserID  string   `json:"userId"`
+	BooksID []string `json:"booksId"`
+	Books   []*Book  `json:"books"`
+}
+
+type WishListUpdate struct {
+	Add    []string `json:"add"`
+	Remove []string `json:"remove"`
 }
 
 type Role string
