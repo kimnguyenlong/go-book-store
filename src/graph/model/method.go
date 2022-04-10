@@ -1,7 +1,6 @@
 package model
 
 import (
-	"book-store/utils"
 	"os"
 	"strconv"
 	"time"
@@ -13,7 +12,7 @@ import (
 func (user User) CreateJWT() (string, error) {
 	jwtLifeTime, err := strconv.Atoi(os.Getenv("JWT_LIFE_TIME"))
 	if err != nil {
-		jwtLifeTime = utils.DEFAULT_JWT_LIFE_TIME
+		return "", err
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"uid":   user.ID,

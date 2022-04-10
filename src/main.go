@@ -12,9 +12,11 @@ import (
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error when loading .env file: %v", err.Error())
+	if os.Getenv("MONGODB_CONNECTTION_URI") == "" || os.Getenv("JWT_LIFE_TIME") == "" || os.Getenv("JWT_SECRET") == "" {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatalf("Error when loading .env file: %v", err.Error())
+		}
 	}
 
 	mongoClient := db.Connect(os.Getenv("MONGODB_CONNECTTION_URI"))
