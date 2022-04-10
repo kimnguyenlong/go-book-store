@@ -1,0 +1,11 @@
+type WishList {
+  id: ID!
+  userId: ID!
+  booksId: [ID!]!
+  books: [Book!]!
+}
+
+input WishListUpdate {
+  add: [ID!]
+  remove: [ID!]
+}

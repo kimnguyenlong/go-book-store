@@ -1,0 +1,20 @@
+type CartItem {
+  bookId: ID!
+  quantity: Int!
+  book: Book!
+}
+
+type Cart {
+  id: ID!
+  userId: ID!
+  items: [CartItem!]!
+}
+
+input CartDataItem {
+  bookId: ID!
+  quantity: Int!
+}
+
+input CartData {
+  items: [CartDataItem!]!
+}

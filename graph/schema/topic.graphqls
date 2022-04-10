@@ -1,0 +1,12 @@
+type Topic {
+  id: ID!
+  name: String!
+  created: Int!
+  updated: Int!
+  #
+  books: [Book!]!
+}
+
+input NewTopic {
+  name: String!
+}

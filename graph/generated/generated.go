@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -45,6 +46,7 @@ type ResolverRoot interface {
 }
 
 type DirectiveRoot struct {
+	ExtraTag func(ctx context.Context, obj interface{}, next graphql.Resolver) (res interface{}, err error)
 }
 
 type ComplexityRoot struct {
@@ -773,13 +775,10 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 }
 
 var sources = []*ast.Source{
-	{Name: "graph/schema.graphqls", Input: `# GraphQL schema example
-#
-# https://gqlgen.com/getting-started/
+	{Name: "graph/schema/author.graphqls", Input: `directive @extraTag on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
 
-### Objects
 type Author {
-  id: ID!
+  id: ID! @extraTag(bson: "_id")
   name: String!
   created: Int!
   updated: Int!
@@ -787,31 +786,11 @@ type Author {
   books: [Book!]!
 }
 
-enum Role {
-  ADMIN
-  CLIENT
-}
-
-type User {
-  id: ID!
+input NewAuthor {
   name: String!
-  email: String!
-  password: String!
-  role: Role!
-  created: Int!
-  updated: Int!
 }
-
-type Topic {
-  id: ID!
-  name: String!
-  created: Int!
-  updated: Int!
-  #
-  books: [Book!]!
-}
-
-type Book {
+`, BuiltIn: false},
+	{Name: "graph/schema/book.graphqls", Input: `type Book {
   id: ID!
   name: String!
   price: Float!
@@ -826,16 +805,24 @@ type Book {
   reviews: [Review!]!
 }
 
-type Review {
-  id: ID!
+input NewBook {
+  name: String!
+  price: Float!
   content: String!
-  created: Int!
-  updated: Int!
-  bookId: ID!
-  userId: ID!
+  topicsId: [ID!]!
+  authorsId: [ID!]!
 }
 
-type CartItem {
+input BookUpdate {
+  name: String
+  content: String
+  addingTopicsId: [ID!]
+  removingTopicsId: [ID!]
+  addingAuthorsId: [ID!]
+  removingAuthorsId: [ID!]
+}
+`, BuiltIn: false},
+	{Name: "graph/schema/cart.graphqls", Input: `type CartItem {
   bookId: ID!
   quantity: Int!
   book: Book!
@@ -847,47 +834,6 @@ type Cart {
   items: [CartItem!]!
 }
 
-type WishList {
-  id: ID!
-  userId: ID!
-  booksId: [ID!]!
-  books: [Book!]!
-}
-
-### Input
-input NewAuthor {
-  name: String!
-}
-
-input NewUser {
-  name: String!
-  email: String!
-  password: String!
-  role: Role!
-}
-
-input NewTopic {
-  name: String!
-}
-
-input NewBook {
-  name: String!
-  price: Float!
-  content: String!
-  topicsId: [ID!]!
-  authorsId: [ID!]!
-}
-
-input NewReview {
-  content: String!
-  bookId: ID!
-}
-
-input Login {
-  email: String!
-  password: String!
-}
-
 input CartDataItem {
   bookId: ID!
   quantity: Int!
@@ -896,33 +842,8 @@ input CartDataItem {
 input CartData {
   items: [CartDataItem!]!
 }
-
-input WishListUpdate {
-  add: [ID!]
-  remove: [ID!]
-}
-
-input BookUpdate {
-  name: String
-  content: String
-  addingTopicsId: [ID!]
-  removingTopicsId: [ID!]
-  addingAuthorsId: [ID!]
-  removingAuthorsId: [ID!]
-}
-
-### Query
-type Query {
-  login(input: Login): String!
-  authors: [Author!]!
-  topics: [Topic!]!
-  books: [Book!]!
-  cart: Cart!
-  wishList: WishList!
-}
-
-### Mutation
-type Mutation {
+`, BuiltIn: false},
+	{Name: "graph/schema/mutation.graphqls", Input: `type Mutation {
   createAuthor(input: NewAuthor!): Author!
 
   createUser(input: NewUser!): User!
@@ -942,6 +863,81 @@ type Mutation {
   setCart(input: CartData!): Cart!
 
   updateWishList(input: WishListUpdate!): WishList!
+}
+`, BuiltIn: false},
+	{Name: "graph/schema/query.graphqls", Input: `type Query {
+  login(input: Login): String!
+  authors: [Author!]!
+  topics: [Topic!]!
+  books: [Book!]!
+  cart: Cart!
+  wishList: WishList!
+}
+`, BuiltIn: false},
+	{Name: "graph/schema/review.graphqls", Input: `type Review {
+  id: ID!
+  content: String!
+  created: Int!
+  updated: Int!
+  bookId: ID!
+  userId: ID!
+}
+
+input NewReview {
+  content: String!
+  bookId: ID!
+}
+`, BuiltIn: false},
+	{Name: "graph/schema/topic.graphqls", Input: `type Topic {
+  id: ID!
+  name: String!
+  created: Int!
+  updated: Int!
+  #
+  books: [Book!]!
+}
+
+input NewTopic {
+  name: String!
+}
+`, BuiltIn: false},
+	{Name: "graph/schema/user.graphqls", Input: `enum Role {
+  ADMIN
+  CLIENT
+}
+
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  password: String!
+  role: Role!
+  created: Int!
+  updated: Int!
+}
+
+input NewUser {
+  name: String!
+  email: String!
+  password: String!
+  role: Role!
+}
+
+input Login {
+  email: String!
+  password: String!
+}
+`, BuiltIn: false},
+	{Name: "graph/schema/wishlist.graphqls", Input: `type WishList {
+  id: ID!
+  userId: ID!
+  booksId: [ID!]!
+  books: [Book!]!
+}
+
+input WishListUpdate {
+  add: [ID!]
+  remove: [ID!]
 }
 `, BuiltIn: false},
 }
@@ -1276,8 +1272,28 @@ func (ec *executionContext) _Author_id(ctx context.Context, field graphql.Collec
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.ID, nil
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return obj.ID, nil
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.ExtraTag == nil {
+				return nil, errors.New("directive extraTag is not implemented")
+			}
+			return ec.directives.ExtraTag(ctx, obj, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(string); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be string`, tmp)
 	})
 	if err != nil {
 		ec.Error(ctx, err)

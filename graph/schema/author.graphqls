@@ -1,0 +1,12 @@
+type Author {
+  id: ID!
+  name: String!
+  created: Int!
+  updated: Int!
+  #
+  books: [Book!]!
+}
+
+input NewAuthor {
+  name: String!
+}

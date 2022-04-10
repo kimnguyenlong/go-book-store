@@ -1,4 +1,4 @@
-package graph
+package resolver
 
 // This file will be automatically regenerated based on the schema, any resolver implementations
 // will be copied through when generating and any unknown code will be moved to the end.
@@ -12,108 +12,9 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 )
-
-func (r *authorResolver) Books(ctx context.Context, obj *model.Author) ([]*model.Book, error) {
-	filter := bson.M{"authorsId": bson.M{"$all": bson.A{obj.ID}}}
-	cs, err := r.DB.Collection("books").Find(context.Background(), filter)
-	if err != nil {
-		return nil, err
-	}
-	var books []*model.Book
-	defer cs.Close(context.Background())
-	err = cs.All(context.Background(), &books)
-	if err != nil {
-		return nil, err
-	}
-	return books, nil
-}
-
-func (r *bookResolver) Topics(ctx context.Context, obj *model.Book) ([]*model.Topic, error) {
-	if len(obj.TopicsID) == 0 {
-		return nil, nil
-	}
-	var topicsId []primitive.ObjectID
-	for _, id := range obj.TopicsID {
-		objId, err := primitive.ObjectIDFromHex(id)
-		if err != nil {
-			continue
-		}
-		topicsId = append(topicsId, objId)
-	}
-	filter := bson.M{"_id": bson.M{"$in": topicsId}}
-	cs, err := r.DB.Collection("topics").Find(context.Background(), filter)
-	if err != nil {
-		return nil, err
-	}
-	var topics []*model.Topic
-	defer cs.Close(context.Background())
-	err = cs.All(context.Background(), &topics)
-	if err != nil {
-		return nil, err
-	}
-	return topics, nil
-}
-
-func (r *bookResolver) Authors(ctx context.Context, obj *model.Book) ([]*model.Author, error) {
-	if len(obj.AuthorsID) == 0 {
-		return nil, nil
-	}
-	var authorsId []primitive.ObjectID
-	for _, id := range obj.AuthorsID {
-		objId, err := primitive.ObjectIDFromHex(id)
-		if err != nil {
-			continue
-		}
-		authorsId = append(authorsId, objId)
-	}
-	filter := bson.M{"_id": bson.M{"$in": authorsId}}
-	cs, err := r.DB.Collection("authors").Find(context.Background(), filter)
-	if err != nil {
-		return nil, err
-	}
-	var authors []*model.Author
-	defer cs.Close(context.Background())
-	err = cs.All(context.Background(), &authors)
-	if err != nil {
-		return nil, err
-	}
-	return authors, nil
-}
-
-func (r *bookResolver) Reviews(ctx context.Context, obj *model.Book) ([]*model.Review, error) {
-	filter := bson.M{"bookId": obj.ID}
-	cs, err := r.DB.Collection("reviews").Find(context.Background(), filter)
-	if err != nil {
-		return nil, err
-	}
-	var reviews []*model.Review
-	defer cs.Close(context.Background())
-	err = cs.All(context.Background(), &reviews)
-	if err != nil {
-		return nil, err
-	}
-	return reviews, nil
-}
-
-func (r *cartItemResolver) Book(ctx context.Context, obj *model.CartItem) (*model.Book, error) {
-	bookId, err := primitive.ObjectIDFromHex(obj.BookID)
-	if err != nil {
-		return nil, err
-	}
-	var book *model.Book
-	err = r.DB.Collection("books").FindOne(context.Background(), bson.M{"_id": bookId}).Decode(&book)
-	if err == mongo.ErrNoDocuments {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return book, nil
-}
 
 func (r *mutationResolver) CreateAuthor(ctx context.Context, input model.NewAuthor) (*model.Author, error) {
 	auth, err := GetAuthFromContext(ctx)
@@ -468,164 +369,17 @@ func (r *mutationResolver) UpdateWishList(ctx context.Context, input model.WishL
 	return wishList, nil
 }
 
-func (r *queryResolver) Login(ctx context.Context, input *model.Login) (string, error) {
-	var user model.User
-	err := r.DB.Collection("users").FindOne(context.Background(), bson.M{"email": input.Email}).Decode(&user)
-	if err != nil {
-		return "", fmt.Errorf("Email %v doesn't exist", input.Email)
-	}
-	if !user.CheckPassword(input.Password) {
-		return "", fmt.Errorf("Incorrect password")
-	}
-	tokenString, err := user.CreateJWT()
-	if err != nil {
-		return "", err
-	}
-	return tokenString, nil
-}
-
-func (r *queryResolver) Authors(ctx context.Context) ([]*model.Author, error) {
-	cs, err := r.DB.Collection("authors").Find(context.Background(), bson.M{})
-	if err != nil {
-		return nil, err
-	}
-	var authors []*model.Author
-	defer cs.Close(context.Background())
-	err = cs.All(context.Background(), &authors)
-	if err != nil {
-		return nil, err
-	}
-	return authors, nil
-}
-
-func (r *queryResolver) Topics(ctx context.Context) ([]*model.Topic, error) {
-	cs, err := r.DB.Collection("topics").Find(context.Background(), bson.M{})
-	if err != nil {
-		return nil, err
-	}
-	var topics []*model.Topic
-	defer cs.Close(context.Background())
-	err = cs.All(context.Background(), &topics)
-	if err != nil {
-		return nil, err
-	}
-	return topics, nil
-}
-
-func (r *queryResolver) Books(ctx context.Context) ([]*model.Book, error) {
-	cs, err := r.DB.Collection("books").Find(context.Background(), bson.M{})
-	if err != nil {
-		return nil, err
-	}
-	var books []*model.Book
-	defer cs.Close(context.Background())
-	err = cs.All(context.Background(), &books)
-	if err != nil {
-		return nil, err
-	}
-	return books, nil
-}
-
-func (r *queryResolver) Cart(ctx context.Context) (*model.Cart, error) {
-	auth, err := GetAuthFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var cart *model.Cart
-	filter := bson.M{"userId": auth.UID}
-	err = r.DB.Collection("carts").FindOne(context.Background(), filter).Decode(&cart)
-	if err == mongo.ErrNoDocuments {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return cart, nil
-}
-
-func (r *queryResolver) WishList(ctx context.Context) (*model.WishList, error) {
-	auth, err := GetAuthFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var wishList *model.WishList
-	filter := bson.M{"userId": auth.UID}
-	err = r.DB.Collection("carts").FindOne(context.Background(), filter).Decode(&wishList)
-	if err == mongo.ErrNoDocuments {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return wishList, nil
-}
-
-func (r *topicResolver) Books(ctx context.Context, obj *model.Topic) ([]*model.Book, error) {
-	filter := bson.M{"topicsId": bson.M{"$all": bson.A{obj.ID}}}
-	cs, err := r.DB.Collection("books").Find(context.Background(), filter)
-	if err != nil {
-		return nil, err
-	}
-	var books []*model.Book
-	defer cs.Close(context.Background())
-	err = cs.All(context.Background(), &books)
-	if err != nil {
-		return nil, err
-	}
-	return books, nil
-}
-
-func (r *wishListResolver) Books(ctx context.Context, obj *model.WishList) ([]*model.Book, error) {
-	if len(obj.BooksID) == 0 {
-		return nil, nil
-	}
-	var booksId []primitive.ObjectID
-	for _, id := range obj.BooksID {
-		objId, err := primitive.ObjectIDFromHex(id)
-		if err != nil {
-			continue
-		}
-		booksId = append(booksId, objId)
-	}
-	filter := bson.M{"_id": bson.M{"$in": booksId}}
-	cs, err := r.DB.Collection("books").Find(context.Background(), filter)
-	if err != nil {
-		return nil, err
-	}
-	var books []*model.Book
-	defer cs.Close(context.Background())
-	err = cs.All(context.Background(), &books)
-	if err != nil {
-		return nil, err
-	}
-	return books, nil
-}
-
-// Author returns generated.AuthorResolver implementation.
-func (r *Resolver) Author() generated.AuthorResolver { return &authorResolver{r} }
-
-// Book returns generated.BookResolver implementation.
-func (r *Resolver) Book() generated.BookResolver { return &bookResolver{r} }
-
-// CartItem returns generated.CartItemResolver implementation.
-func (r *Resolver) CartItem() generated.CartItemResolver { return &cartItemResolver{r} }
-
 // Mutation returns generated.MutationResolver implementation.
 func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
 
-// Query returns generated.QueryResolver implementation.
-func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
-
-// Topic returns generated.TopicResolver implementation.
-func (r *Resolver) Topic() generated.TopicResolver { return &topicResolver{r} }
-
-// WishList returns generated.WishListResolver implementation.
-func (r *Resolver) WishList() generated.WishListResolver { return &wishListResolver{r} }
-
-type authorResolver struct{ *Resolver }
-type bookResolver struct{ *Resolver }
-type cartItemResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
-type queryResolver struct{ *Resolver }
-type topicResolver struct{ *Resolver }
-type wishListResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+func (r *mutationResolver) GetUser(ctx context.Context, id string) (*model.User, error) {
+	panic(fmt.Errorf("not implemented"))
+}

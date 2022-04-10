@@ -1,0 +1,21 @@
+type Mutation {
+  createAuthor(input: NewAuthor!): Author!
+
+  createUser(input: NewUser!): User!
+
+  createTopic(input: NewTopic!): Topic!
+  removeTopic(id: ID!): Topic!
+  updateTopic(id: ID!, name: String!): Topic!
+
+  createBook(input: NewBook!): Book!
+  removeBook(id: ID!): Book!
+  updateBook(id: ID!, update: BookUpdate!): Book!
+
+  createReview(input: NewReview!): Review!
+  removeReview(bookId: ID!, reviewId: ID!): Review!
+  updateReview(bookId: ID!, reviewId: ID!, content: String!): Review!
+
+  setCart(input: CartData!): Cart!
+
+  updateWishList(input: WishListUpdate!): WishList!
+}

@@ -1,0 +1,31 @@
+type Book {
+  id: ID!
+  name: String!
+  price: Float!
+  content: String!
+  created: Int!
+  updated: Int!
+  topicsId: [ID!]!
+  authorsId: [ID!]!
+  #
+  topics: [Topic!]!
+  authors: [Author!]!
+  reviews: [Review!]!
+}
+
+input NewBook {
+  name: String!
+  price: Float!
+  content: String!
+  topicsId: [ID!]!
+  authorsId: [ID!]!
+}
+
+input BookUpdate {
+  name: String
+  content: String
+  addingTopicsId: [ID!]
+  removingTopicsId: [ID!]
+  addingAuthorsId: [ID!]
+  removingAuthorsId: [ID!]
+}

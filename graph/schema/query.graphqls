@@ -1,0 +1,8 @@
+type Query {
+  login(input: Login): String!
+  authors: [Author!]!
+  topics: [Topic!]!
+  books: [Book!]!
+  cart: Cart!
+  wishList: WishList!
+}

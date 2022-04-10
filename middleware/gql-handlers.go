@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"book-store/graph"
 	"book-store/graph/generated"
+	"book-store/graph/resolver"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
@@ -11,7 +11,7 @@ import (
 )
 
 func GraphqlHandler(db *mongo.Database) gin.HandlerFunc {
-	resolver := &graph.Resolver{DB: db}
+	resolver := &resolver.Resolver{DB: db}
 	schema := generated.NewExecutableSchema(generated.Config{Resolvers: resolver})
 	h := handler.NewDefaultServer(schema)
 	return func(c *gin.Context) {
