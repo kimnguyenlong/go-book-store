@@ -127,6 +127,15 @@ input WishListUpdate {
   remove: [ID!]
 }
 
+input BookUpdate {
+  name: String
+  content: String
+  addingTopicsId: [ID!]
+  removingTopicsId: [ID!]
+  addingAuthorsId: [ID!]
+  removingAuthorsId: [ID!]
+}
+
 ### Query
 type Query {
   login(input: Login): String!
@@ -144,10 +153,16 @@ type Mutation {
   createUser(input: NewUser!): User!
 
   createTopic(input: NewTopic!): Topic!
+  removeTopic(id: ID!): Topic!
+  updateTopic(id: ID!, name: String!): Topic!
 
   createBook(input: NewBook!): Book!
+  removeBook(id: ID!): Book!
+  updateBook(id: ID!, update: BookUpdate!): Book!
 
   createReview(input: NewReview!): Review!
+  removeReview(bookId: ID!, reviewId: ID!): Review!
+  updateReview(bookId: ID!, reviewId: ID!, content: String!): Review!
 
   setCart(input: CartData!): Cart!
 

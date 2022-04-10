@@ -30,6 +30,15 @@ type Book struct {
 	Reviews   []*Review `json:"reviews"`
 }
 
+type BookUpdate struct {
+	Name              *string  `json:"name"`
+	Content           *string  `json:"content"`
+	AddingTopicsID    []string `json:"addingTopicsId"`
+	RemovingTopicsID  []string `json:"removingTopicsId"`
+	AddingAuthorsID   []string `json:"addingAuthorsId"`
+	RemovingAuthorsID []string `json:"removingAuthorsId"`
+}
+
 type Cart struct {
 	ID     string      `json:"id" bson:"_id"`
 	UserID string      `json:"userId"`

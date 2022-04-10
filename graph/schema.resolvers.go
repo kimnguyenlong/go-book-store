@@ -12,6 +12,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -32,6 +33,9 @@ func (r *authorResolver) Books(ctx context.Context, obj *model.Author) ([]*model
 }
 
 func (r *bookResolver) Topics(ctx context.Context, obj *model.Book) ([]*model.Topic, error) {
+	if len(obj.TopicsID) == 0 {
+		return nil, nil
+	}
 	var topicsId []primitive.ObjectID
 	for _, id := range obj.TopicsID {
 		objId, err := primitive.ObjectIDFromHex(id)
@@ -55,6 +59,9 @@ func (r *bookResolver) Topics(ctx context.Context, obj *model.Book) ([]*model.To
 }
 
 func (r *bookResolver) Authors(ctx context.Context, obj *model.Book) ([]*model.Author, error) {
+	if len(obj.AuthorsID) == 0 {
+		return nil, nil
+	}
 	var authorsId []primitive.ObjectID
 	for _, id := range obj.AuthorsID {
 		objId, err := primitive.ObjectIDFromHex(id)
@@ -99,6 +106,9 @@ func (r *cartItemResolver) Book(ctx context.Context, obj *model.CartItem) (*mode
 	}
 	var book *model.Book
 	err = r.DB.Collection("books").FindOne(context.Background(), bson.M{"_id": bookId}).Decode(&book)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +199,50 @@ func (r *mutationResolver) CreateTopic(ctx context.Context, input model.NewTopic
 	}, nil
 }
 
+func (r *mutationResolver) RemoveTopic(ctx context.Context, id string) (*model.Topic, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if auth.Role != model.RoleAdmin.String() {
+		return nil, fmt.Errorf("Access denied")
+	}
+	topicOID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	var topic *model.Topic
+	filter := bson.M{"_id": topicOID}
+	err = r.DB.Collection("topics").FindOneAndDelete(context.Background(), filter).Decode(&topic)
+	if err != nil {
+		return nil, err
+	}
+	return topic, nil
+}
+
+func (r *mutationResolver) UpdateTopic(ctx context.Context, id string, name string) (*model.Topic, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if auth.Role != model.RoleAdmin.String() {
+		return nil, fmt.Errorf("Access denied")
+	}
+	topicOID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	var topic *model.Topic
+	filter := bson.M{"_id": topicOID}
+	update := bson.M{"$set": bson.M{"name": name}}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err = r.DB.Collection("topics").FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&topic)
+	if err != nil {
+		return nil, err
+	}
+	return topic, nil
+}
+
 func (r *mutationResolver) CreateBook(ctx context.Context, input model.NewBook) (*model.Book, error) {
 	auth, err := GetAuthFromContext(ctx)
 	if err != nil {
@@ -223,6 +277,81 @@ func (r *mutationResolver) CreateBook(ctx context.Context, input model.NewBook) 
 	}, nil
 }
 
+func (r *mutationResolver) RemoveBook(ctx context.Context, id string) (*model.Book, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if auth.Role != model.RoleAdmin.String() {
+		return nil, fmt.Errorf("Access denied")
+	}
+	bookOID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	var book *model.Book
+	filter := bson.M{"_id": bookOID}
+	err = r.DB.Collection("books").FindOneAndDelete(context.Background(), filter).Decode(&book)
+	if err != nil {
+		return nil, err
+	}
+	// remove all reviews
+	filter = bson.M{"bookId": id}
+	_, err = r.DB.Collection("reviews").DeleteMany(context.Background(), filter)
+	if err != nil {
+		return nil, err
+	}
+	return book, nil
+}
+
+func (r *mutationResolver) UpdateBook(ctx context.Context, id string, update model.BookUpdate) (*model.Book, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if auth.Role != model.RoleAdmin.String() {
+		return nil, fmt.Errorf("Access denied")
+	}
+	bookOID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	var book *model.Book
+	filter := bson.M{"_id": bookOID}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	updateData := bson.M{}
+	if update.Name != nil {
+		updateData["$set"] = bson.M{"name": *update.Name}
+	}
+	if update.Content != nil {
+		updateData["$set"] = bson.M{"content": *update.Content}
+	}
+	if len(update.AddingTopicsID) > 0 {
+		updateData["$addToSet"] = bson.M{"topicsId": bson.M{"$each": update.AddingTopicsID}}
+	}
+	if len(update.AddingAuthorsID) > 0 {
+		updateData["$addToSet"] = bson.M{"authorsId": bson.M{"$each": update.AddingAuthorsID}}
+	}
+	err = r.DB.Collection("books").FindOneAndUpdate(context.Background(), filter, updateData, opts).Decode(&book)
+	if err != nil {
+		return nil, err
+	}
+	updateData = bson.M{}
+	if len(update.RemovingTopicsID) > 0 {
+		updateData["$pull"] = bson.M{"topicsId": bson.M{"$in": update.RemovingTopicsID}}
+	}
+	if len(update.RemovingAuthorsID) > 0 {
+		updateData["$pull"] = bson.M{"authorsId": bson.M{"$in": update.RemovingAuthorsID}}
+	}
+	if _, ok := updateData["$pull"]; ok {
+		err = r.DB.Collection("books").FindOneAndUpdate(context.Background(), filter, updateData, opts).Decode(&book)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return book, nil
+}
+
 func (r *mutationResolver) CreateReview(ctx context.Context, input model.NewReview) (*model.Review, error) {
 	auth, err := GetAuthFromContext(ctx)
 	if err != nil {
@@ -248,6 +377,44 @@ func (r *mutationResolver) CreateReview(ctx context.Context, input model.NewRevi
 		BookID:  input.BookID,
 		UserID:  auth.UID,
 	}, nil
+}
+
+func (r *mutationResolver) RemoveReview(ctx context.Context, bookID string, reviewID string) (*model.Review, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reviewOID, err := primitive.ObjectIDFromHex(reviewID)
+	if err != nil {
+		return nil, err
+	}
+	var review *model.Review
+	filter := bson.M{"_id": reviewOID, "bookId": bookID, "userId": auth.UID}
+	err = r.DB.Collection("reviews").FindOneAndDelete(context.Background(), filter).Decode(&review)
+	if err != nil {
+		return nil, err
+	}
+	return review, nil
+}
+
+func (r *mutationResolver) UpdateReview(ctx context.Context, bookID string, reviewID string, content string) (*model.Review, error) {
+	auth, err := GetAuthFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reviewOID, err := primitive.ObjectIDFromHex(reviewID)
+	if err != nil {
+		return nil, err
+	}
+	var review *model.Review
+	filter := bson.M{"_id": reviewOID, "bookId": bookID, "userId": auth.UID}
+	update := bson.M{"$set": bson.M{"content": content}}
+	options := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err = r.DB.Collection("reviews").FindOneAndUpdate(context.Background(), filter, update, options).Decode(&review)
+	if err != nil {
+		return nil, err
+	}
+	return review, nil
 }
 
 func (r *mutationResolver) SetCart(ctx context.Context, input model.CartData) (*model.Cart, error) {
@@ -367,6 +534,9 @@ func (r *queryResolver) Cart(ctx context.Context) (*model.Cart, error) {
 	var cart *model.Cart
 	filter := bson.M{"userId": auth.UID}
 	err = r.DB.Collection("carts").FindOne(context.Background(), filter).Decode(&cart)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -381,6 +551,9 @@ func (r *queryResolver) WishList(ctx context.Context) (*model.WishList, error) {
 	var wishList *model.WishList
 	filter := bson.M{"userId": auth.UID}
 	err = r.DB.Collection("carts").FindOne(context.Background(), filter).Decode(&wishList)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +577,7 @@ func (r *topicResolver) Books(ctx context.Context, obj *model.Topic) ([]*model.B
 
 func (r *wishListResolver) Books(ctx context.Context, obj *model.WishList) ([]*model.Book, error) {
 	if len(obj.BooksID) == 0 {
-		return []*model.Book{}, nil
+		return nil, nil
 	}
 	var booksId []primitive.ObjectID
 	for _, id := range obj.BooksID {
