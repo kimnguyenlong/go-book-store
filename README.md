@@ -25,7 +25,7 @@ After cloning this repository, you can run the service via the 2 following ways:
 
 Run then cmd `docker-compose build` and then `docker-compose up`, then the service will be available on [localhost:8080](localhost:8080)
 
-#### 1. Without Docker
+#### 2. Without Docker
 
 You have to create a `.env` file in the `src` folder, then you need to specify 3 env variables:`MONGODB_CONNECTTION_URI`, `JWT_LIFE_TIME`, `JWT_SECRET`.
 After that, you can run the service via cmd `go run main.go` in the`src` folder and the service will be available on [localhost:8080](localhost:8080)

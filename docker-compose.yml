@@ -7,9 +7,9 @@ services:
     ports:
       - 8080:8080
     environment:
-      - MONGODB_CONNECTTION_URI: mongodb://root:root@mongodb-book-store:27017/?authSource=admin&w=majority&readPreference=primary&appname=MongoDB%20Compass&retryWrites=true&directConnection=true&ssl=false
-      - JWT_LIFE_TIME: 7
-      - JWT_SECRET: secret
+      MONGODB_CONNECTTION_URI: mongodb://root:root@mongodb-book-store:27017/?authSource=admin&w=majority&readPreference=primary&appname=MongoDB%20Compass&retryWrites=true&directConnection=true&ssl=false
+      JWT_LIFE_TIME: 7
+      JWT_SECRET: secret
     depends_on:
       - mongodb-book-store
 
